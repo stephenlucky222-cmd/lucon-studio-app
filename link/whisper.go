@@ -37,6 +37,7 @@ var wsp struct {
 	err     string
 	started time.Time
 	bin     int        // which build works on this computer
+	slowN   int        // pieces of speech that took longer than they last
 	busy    sync.Mutex // one piece of speech at a time
 	last    time.Time
 }
@@ -367,6 +368,12 @@ func handleWhisper(w http.ResponseWriter, r *http.Request) {
 		prompt = prompt[len(prompt)-400:]
 	}
 	wsp.busy.Lock()
+	if err := whisperStart(); err != nil { // loading the model is not counted as speed
+		wsp.busy.Unlock()
+		w.WriteHeader(503)
+		writeJSON(w, map[string]string{"error": err.Error()})
+		return
+	}
 	t0 := time.Now()
 	text, err := whisperRun(pcm, lang, prompt)
 	wsp.busy.Unlock()
@@ -375,10 +382,28 @@ func handleWhisper(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]string{"error": err.Error()})
 		return
 	}
+	took, secs := time.Since(t0), float64(len(pcm))/32000
 	wsp.Lock()
 	wsp.last = time.Now()
+	// too slow for live captions with the larger model: change to the smaller one by itself
+	if secs >= 1.5 && took.Seconds() > secs*0.85 {
+		wsp.slowN++
+	} else if wsp.slowN > 0 {
+		wsp.slowN--
+	}
+	switchModel := ""
+	if wsp.slowN >= 3 && strings.Contains(filepath.Base(wsp.model), "small") {
+		if m := pickModel("base"); m != "" && m != wsp.model {
+			switchModel = m
+			wsp.model, wsp.slowN = m, 0
+		}
+	}
 	wsp.Unlock()
-	writeJSON(w, map[string]any{"text": text, "ms": time.Since(t0).Milliseconds(), "secs": float64(len(pcm)) / 32000})
+	if switchModel != "" {
+		log.Printf("Offline captions: this computer is slow for the larger model; using %s", filepath.Base(switchModel))
+		go func() { wsp.busy.Lock(); whisperStop(); wsp.busy.Unlock(); whisperStart() }()
+	}
+	writeJSON(w, map[string]any{"text": text, "ms": took.Milliseconds(), "secs": secs})
 }
 
 // stop Whisper after 20 minutes without speech, to give the memory back

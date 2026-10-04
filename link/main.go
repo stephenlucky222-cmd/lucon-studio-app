@@ -769,7 +769,16 @@ func main() {
 	go func() { <-sig; stopAll() }()
 	if *appMode {
 		// the app keeps our input open; when the app closes (or crashes) it closes, and we stop too
-		go func() { io.Copy(io.Discard, os.Stdin); log.Printf("The Lucon Studio app closed. Stopping."); live.Lock(); if live.s != nil { live.s.End() }; live.Unlock(); stopAll() }()
+		go func() {
+			io.Copy(io.Discard, os.Stdin)
+			log.Printf("The Lucon Studio app closed. Stopping.")
+			live.Lock()
+			if live.s != nil {
+				live.s.End()
+			}
+			live.Unlock()
+			stopAll()
+		}()
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleUI)
