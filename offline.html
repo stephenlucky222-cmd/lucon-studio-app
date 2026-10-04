@@ -1,0 +1,8 @@
+<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src https://events.luconhouse.com; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><title>Lucon Studio</title><style>
+body{margin:0;height:100vh;display:grid;place-items:center;background:#06080d;color:#e5e7eb;font:15px -apple-system,"Segoe UI",Roboto,sans-serif;text-align:center}
+.b{max-width:520px;padding:24px}h1{font-size:22px}p{color:#94a3b8;line-height:1.55}button{height:44px;border-radius:10px;border:0;background:#2563eb;color:#fff;font-weight:800;font-size:14px;padding:0 22px;cursor:pointer;margin-top:8px}small{display:block;margin-top:18px;color:#475569;font-size:11.5px}
+</style></head><body><div class="b"><h1>Lucon Studio cannot reach the internet</h1>
+<p>The first time, Lucon Studio needs the internet to sign in and open your event. After that it keeps a copy, so cameras, graphics, scripture, songs, recording and offline captions keep working without internet.</p>
+<button id="r">Try again</button><small id="d"></small></div>
+<script>const q=new URLSearchParams(location.search); document.getElementById('d').textContent=q.get('d')||''; document.getElementById('r').onclick=()=>{ location.href=q.get('u')||'https://events.luconhouse.com/workspace/index.html'; }; setInterval(()=>{ if(navigator.onLine) fetch('https://events.luconhouse.com/manifest.webmanifest',{mode:'no-cors',cache:'no-store'}).then(()=>{ location.href=q.get('u')||'https://events.luconhouse.com/workspace/index.html'; }).catch(()=>{}); },8000);</script>
+</body></html>

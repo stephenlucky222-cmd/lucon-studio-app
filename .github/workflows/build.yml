@@ -1,0 +1,174 @@
+# Builds Lucon Studio for Mac (Apple chip and Intel) and Windows on GitHub's computers, tests it,
+# and (for a version tag like v1.0.0) publishes the downloads on the Releases page.
+name: Build Lucon Studio
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  WHISPER_REF: v1.9.4
+  SPEECH: "Now faith is the substance of things hoped for, the evidence of things not seen."
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: mac-apple
+            os: macos-15
+            goos: darwin
+            goarch: arm64
+            cmake: -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+            builder: --mac --arm64
+            artifact: Lucon-Studio-Mac-Apple.${ext}
+          - name: mac-intel
+            os: macos-15-intel
+            goos: darwin
+            goarch: amd64
+            cmake: -DGGML_METAL=OFF -DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+            builder: --mac --x64
+            artifact: Lucon-Studio-Mac-Intel.${ext}
+          - name: windows
+            os: windows-2022
+            goos: windows
+            goarch: amd64
+            cmake: -DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_OPENMP=OFF -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+            compat: -DGGML_NATIVE=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_OPENMP=OFF -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+            builder: --win --x64
+            artifact: Lucon-Studio-Windows-Setup.${ext}
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version from the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: node -e "const f='package.json',p=require('./'+f);p.version='${GITHUB_REF_NAME#v}';require('fs').writeFileSync(f,JSON.stringify(p,null,2))"
+
+      # ---------- Lucon Link ----------
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: link/go.mod
+          cache: false
+      - name: Build Lucon Link
+        run: |
+          EXT=""; [ "${{ matrix.goos }}" = "windows" ] && EXT=".exe"
+          mkdir -p res/link
+          cd link && CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -trimpath -ldflags "-s -w" -o ../res/link/lucon-link$EXT .
+          ls -la ../res/link
+
+      # ---------- Whisper (offline captions) ----------
+      - uses: actions/checkout@v4
+        with:
+          repository: ggml-org/whisper.cpp
+          ref: ${{ env.WHISPER_REF }}
+          path: wcpp
+      - name: Build Whisper
+        run: |
+          cd wcpp
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_SERVER=ON -DWHISPER_SDL2=OFF -DWHISPER_CURL=OFF ${{ matrix.cmake }}
+          cmake --build build --config Release --target whisper-server -j 4
+          mkdir -p ../res/whisper/models
+          if [ "${{ matrix.goos }}" = "windows" ]; then cp build/bin/Release/whisper-server.exe ../res/whisper/; else cp build/bin/whisper-server ../res/whisper/; fi
+          if [ -n "${{ matrix.compat }}" ]; then
+            cmake -B build2 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_SERVER=ON -DWHISPER_SDL2=OFF -DWHISPER_CURL=OFF ${{ matrix.compat }}
+            cmake --build build2 --config Release --target whisper-server -j 4
+            cp build2/bin/Release/whisper-server.exe ../res/whisper/whisper-server-compat.exe
+          fi
+          ls -la ../res/whisper
+      - name: Whisper models (cached)
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: whisper-models-base-small-q5_1-v1
+      - name: Download models
+        run: |
+          mkdir -p models
+          for m in ggml-base-q5_1.bin ggml-small-q5_1.bin; do
+            [ -s models/$m ] || curl -fsSL --retry 3 -o models/$m "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$m"
+          done
+          ls -la models
+          cp models/*.bin res/whisper/models/
+          cp wcpp/LICENSE res/whisper/LICENSE-whisper.txt
+
+      # ---------- real test of offline captions ----------
+      - name: Make a spoken sentence (Mac)
+        if: runner.os == 'macOS'
+        run: |
+          say -o "$RUNNER_TEMP/speech.aiff" "$SPEECH"
+          afconvert -f WAVE -d LEI16@16000 -c 1 "$RUNNER_TEMP/speech.aiff" "$RUNNER_TEMP/speech.wav"
+      - name: Make a spoken sentence (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Speech
+          $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+          $f = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
+          $s.SetOutputToWaveFile("$env:RUNNER_TEMP\speech.wav", $f)
+          $s.Speak($env:SPEECH)
+          $s.Dispose()
+      - name: Test offline captions
+        run: |
+          EXT=""; [ "${{ matrix.goos }}" = "windows" ] && EXT=".exe"
+          python3 tests/whisper_test.py "res/link/lucon-link$EXT" "res/whisper" "$RUNNER_TEMP/speech.wav" || python tests/whisper_test.py "res/link/lucon-link$EXT" "res/whisper" "$RUNNER_TEMP/speech.wav"
+
+      # ---------- the app ----------
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Build the app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder ${{ matrix.builder }} --publish never -c.artifactName='${{ matrix.artifact }}'
+      - name: Test the app (opens the Studio website inside the app)
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then APP="dist/win-unpacked/Lucon Studio.exe"; else APP="$(find dist -maxdepth 2 -name 'Lucon Studio.app' | head -1)/Contents/MacOS/Lucon Studio"; fi
+          echo "App: $APP"
+          LUCON_SMOKE="$RUNNER_TEMP/smoke.json" LUCON_SMOKE_PCM="$RUNNER_TEMP/speech.pcm" "$APP" || true
+          cat "$RUNNER_TEMP/smoke.json"
+          node -e "const r=require(process.argv[1]); if(!r.ok){ console.error('APP TEST FAILED'); process.exit(1); } console.log('APP TEST PASSED')" "$RUNNER_TEMP/smoke.json"
+      - name: Files
+        run: ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            dist/*.dmg
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest*.yml
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - run: ls -la out
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Lucon Studio ${{ github.ref_name }}
+          body: |
+            Download the one for your computer:
+            • Mac with an Apple chip (M1, M2, M3, M4…): Lucon-Studio-Mac-Apple.dmg
+            • Mac with an Intel processor: Lucon-Studio-Mac-Intel.dmg
+            • Windows 10 or 11: Lucon-Studio-Windows-Setup.exe
+          files: out/*
+          fail_on_unmatched_files: true

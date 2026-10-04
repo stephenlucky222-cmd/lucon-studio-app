@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lucon Link</title>
+<style>
+:root{--bg:#0b1020;--p:#121a2e;--p2:#18223a;--l:#26324d;--t:#e6ebf5;--m:#8b97b1;--acc:#1d4ed8;--ok:#86efac;--bad:#fca5a5}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:14px/1.45 Inter,"Segoe UI",system-ui,-apple-system,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--l);background:#0e1528;position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.logo{width:28px;height:28px;border-radius:7px;background:var(--acc);box-shadow:inset 0 0 0 4px #0e1528,inset 0 0 0 7px #fff;flex:none}
+header b{letter-spacing:.06em}.sp{flex:1}
+.chip{font-size:12.5px;font-weight:800;padding:5px 10px;border-radius:8px;background:var(--p2);border:1px solid var(--l);color:var(--m)}.chip.ok{color:var(--ok)}.chip.bad{color:var(--bad)}.chip.live{background:#7f1d1d;border-color:#ef4444;color:#fff}
+main{max-width:980px;margin:0 auto;padding:20px 22px 60px;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--p);border:1px solid var(--l);border-radius:14px;padding:16px 18px}
+h2{margin:0 0 4px;font-size:17px}.sub{color:var(--m);font-size:12.5px;margin:0 0 10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button,.btn{height:36px;border-radius:9px;border:1px solid var(--l);background:var(--p2);color:var(--t);font-weight:800;font-size:13px;padding:0 14px;cursor:pointer;font-family:inherit}
+button.go{background:#16a34a;border-color:#16a34a;color:#fff}button.pri{background:var(--acc);border-color:var(--acc);color:#fff}button:disabled{opacity:.5;cursor:default}
+input,select{height:36px;background:#0e1528;border:1px solid var(--l);color:var(--t);border-radius:9px;padding:0 10px;font:inherit;font-size:13px;min-width:0}
+input[type=checkbox]{height:auto}
+.dest{display:grid;grid-template-columns:34px 1.1fr 2fr 1.3fr auto auto;gap:8px;align-items:center;padding:10px 0;border-top:1px solid var(--l)}
+.dest:first-of-type{border-top:0}
+.ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-weight:900;color:#fff;font-size:12px}
+.t-youtube{background:#dc2626}.t-facebook{background:#1d4ed8}.t-instagram{background:linear-gradient(135deg,#f59e0b,#db2777,#7c3aed)}.t-custom{background:#475569}
+.tog{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;white-space:nowrap;cursor:pointer}
+.x{border:0;background:none;color:var(--m);font-size:16px;padding:0 6px;height:30px}
+.note{font-size:12.5px;color:var(--m);margin-top:8px}.warn{color:#fbbf24}.err{color:var(--bad);font-weight:700}
+.cam{display:grid;grid-template-columns:1.2fr 1.1fr 1.3fr 80px auto;gap:8px;align-items:center;padding:10px 0;border-top:1px solid var(--l)}
+.pre{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;grid-column:1/-1}
+.bar{position:sticky;bottom:0;background:#0e1528;border-top:1px solid var(--l);padding:12px 22px;display:flex;gap:10px;align-items:center;justify-content:center}
+.outs div{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:10px;padding:8px 0;border-top:1px solid var(--l);font-size:13px}.outs div:first-child{border-top:0}
+code{background:#0e1528;border:1px solid var(--l);border-radius:6px;padding:2px 6px;font-size:12.5px}
+@media(max-width:760px){.dest,.cam{grid-template-columns:1fr 1fr}.dest .ic{display:none}}
+</style>
+</head>
+<body>
+<header><span class="logo"></span><b>LUCON LINK</b><span class="sp"></span><span class="chip" id="cStudio">Lucon Studio: waiting</span><span class="chip" id="cFF">FFmpeg: checking…</span><span class="chip" id="cLive" style="display:none">● LIVE</span></header>
+<main>
+  <div class="card" id="ffCard" style="display:none"><h2>Install FFmpeg (one time)</h2><p class="sub">FFmpeg is the free video engine Lucon Link uses to send the stream and make recordings.</p>
+    <div class="row"><button class="go" id="ffInstall">Install FFmpeg</button><button id="ffCheck">Check again</button></div>
+    <div class="note" id="ffMsg"></div>
+    <div class="note">Already have FFmpeg? Type where ffmpeg is: <span class="row" style="margin-top:6px"><input id="ffPath" placeholder="C:\ffmpeg\bin\ffmpeg.exe" style="width:340px"><button id="ffUse">Use this file</button></span></div>
+  </div>
+  <div class="card" id="liveCard" style="display:none"><h2>Live now</h2><div class="outs" id="outs"></div></div>
+  <div class="card"><h2>Where to stream</h2><p class="sub">Copy the server address and stream key from each platform’s live page. The keys stay on this laptop and are never shown again in full.</p>
+    <div id="dests"></div>
+    <div class="row" style="margin-top:10px"><button data-add="youtube">＋ YouTube</button><button data-add="facebook">＋ Facebook Page</button><button data-add="instagram">＋ Instagram</button><button data-add="custom">＋ Another service</button></div>
+    <div class="note">YouTube: YouTube Studio → Create → Go live → Stream. Facebook: Live Producer → Streaming software. Instagram: Live → Streaming software (upright 9:16; Lucon Link uses the centre of your picture).</div>
+  </div>
+  <div class="card"><h2>Professional recording</h2><p class="sub">Made from the live picture while you stream (or record only). Files for editing in Premiere, Final Cut, DaVinci or Avid.</p>
+    <div class="row"><select id="recFormat"></select><input id="recFolder" style="flex:1;min-width:240px"><button id="pick">Choose folder</button><button id="openF">Open folder</button></div>
+    <div class="note">Keep Lucon Link open until the Studio says the broadcast has ended, so the file is finished properly.</div>
+  </div>
+  <div class="card"><h2>PTZ cameras</h2><p class="sub">Cameras controlled over the network (VISCA). Give each one a fixed IP address on the same network as this laptop.</p>
+    <div id="cams"></div>
+    <div class="row" style="margin-top:10px"><button id="addCam">＋ Add camera</button></div>
+    <div class="note">Sony and most others: “VISCA over IP”. PTZOptics and many others: “VISCA UDP” (port 1259) or “VISCA TCP” (port 5678). Check the camera’s manual.</div>
+  </div>
+  <div class="card"><h2>Advanced</h2>
+    <label class="tog"><input type="checkbox" id="enc"> Re-encode the picture before streaming (use this if YouTube warns about “keyframe frequency”; uses more laptop power)</label>
+    <div class="note" id="encInfo"></div>
+  </div>
+</main>
+<div class="bar"><span class="note err" id="msg" style="margin:0"></span><button class="pri" id="save">Save settings</button></div>
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id);}, S=null, dests=[], cams=[], dirty=false;
+  function esc(v){ return String(v==null?'':v).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m];}); }
+  var DEF={youtube:['YouTube','rtmp://a.rtmp.youtube.com/live2'],facebook:['Facebook Page','rtmps://live-api-s.facebook.com:443/rtmp/'],instagram:['Instagram',''],custom:['Another service','']};
+  var ICON={youtube:'▶',facebook:'f',instagram:'◎',custom:'+'};
+  function api(p,body){ return fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{}).then(function(r){ return r.json().catch(function(){return {};}).then(function(j){ if(!r.ok&&!j.error) j.error='Something went wrong ('+r.status+')'; return j; }); }); }
+  function mark(){ dirty=true; $('msg').textContent='Not saved yet'; $('msg').className='note warn'; }
+  function drawDests(){
+    $('dests').innerHTML=dests.length?dests.map(function(d,n){ return '<div class="dest"><span class="ic t-'+d.type+'">'+ICON[d.type]+'</span><input data-n="'+n+'" data-f="name" value="'+esc(d.name)+'" maxlength="40"><input data-n="'+n+'" data-f="url" value="'+esc(d.url)+'" placeholder="rtmp:// or rtmps:// server address"><input data-n="'+n+'" data-f="key" type="password" autocomplete="off" value="'+esc(d.key||'')+'" placeholder="'+(d.keyHint?esc(d.keyHint)+' saved':'Stream key')+'"><label class="tog"><input type="checkbox" data-n="'+n+'" data-f="enabled" '+(d.enabled?'checked':'')+'>On</label><button class="x" data-rm="'+n+'" title="Remove">✕</button></div>'; }).join(''):'<p class="note">No platforms yet. Add one below.</p>';
+    Array.prototype.forEach.call($('dests').querySelectorAll('[data-f]'),function(el){ el.oninput=el.onchange=function(){ var d=dests[+el.dataset.n]; d[el.dataset.f]=el.type==='checkbox'?el.checked:el.value; mark(); }; });
+    Array.prototype.forEach.call($('dests').querySelectorAll('[data-rm]'),function(b){ b.onclick=function(){ if(confirm('Remove '+dests[+b.dataset.rm].name+'?')){ dests.splice(+b.dataset.rm,1); drawDests(); mark(); } }; });
+  }
+  function drawCams(){
+    $('cams').innerHTML=cams.length?cams.map(function(c,n){ var p=c.presets||{}, pre=''; for(var i=1;i<=6;i++) pre+='<input data-n="'+n+'" data-p="'+i+'" value="'+esc(p[i]||'')+'" placeholder="Preset '+i+'" maxlength="20">';
+      return '<div class="cam"><input data-n="'+n+'" data-f="name" value="'+esc(c.name)+'" placeholder="PTZ 1 · Stage" maxlength="30"><input data-n="'+n+'" data-f="ip" value="'+esc(c.ip)+'" placeholder="192.168.1.60"><select data-n="'+n+'" data-f="proto"><option value="sony">VISCA over IP (Sony)</option><option value="udp">VISCA UDP</option><option value="tcp">VISCA TCP</option></select><input data-n="'+n+'" data-f="port" type="number" value="'+(c.port||'')+'" placeholder="Port"><button class="x" data-rm="'+n+'" title="Remove">✕</button><div class="pre">'+pre+'</div></div>'; }).join(''):'<p class="note">No PTZ cameras yet.</p>';
+    Array.prototype.forEach.call($('cams').querySelectorAll('select[data-f=proto]'),function(s){ s.value=cams[+s.dataset.n].proto||'sony'; });
+    Array.prototype.forEach.call($('cams').querySelectorAll('[data-f]'),function(el){ el.oninput=el.onchange=function(){ var c=cams[+el.dataset.n]; c[el.dataset.f]=el.dataset.f==='port'?(Number(el.value)||0):el.value; mark(); }; });
+    Array.prototype.forEach.call($('cams').querySelectorAll('[data-p]'),function(el){ el.oninput=function(){ var c=cams[+el.dataset.n]; c.presets=c.presets||{}; if(el.value.trim()) c.presets[el.dataset.p]=el.value.trim(); else delete c.presets[el.dataset.p]; mark(); }; });
+    Array.prototype.forEach.call($('cams').querySelectorAll('[data-rm]'),function(b){ b.onclick=function(){ if(confirm('Remove this camera?')){ cams.splice(+b.dataset.rm,1); drawCams(); mark(); } }; });
+  }
+  function drawStatus(){
+    var f=S.ffmpeg||{};
+    $('cFF').textContent=f.ok?'FFmpeg ready':'FFmpeg needed'; $('cFF').className='chip '+(f.ok?'ok':'bad');
+    $('ffCard').style.display=f.ok?'none':'';
+    $('ffInstall').disabled=!!f.installing; $('ffMsg').textContent=f.log||(S.os==='windows'?'':'On a Mac: open Terminal and type  brew install ffmpeg  then click Check again.');
+    if(S.os!=='windows') $('ffInstall').style.display='none';
+    $('cStudio').textContent=S.live?'Lucon Studio: live':S.studioSeen?'Lucon Studio: connected':'Lucon Studio: waiting'; $('cStudio').className='chip '+(S.live||S.studioSeen?'ok':'');
+    $('cLive').style.display=S.live?'':'none'; $('liveCard').style.display=S.live?'':'none';
+    if(S.live){ $('outs').innerHTML=(S.live.outs||[]).map(function(o){ var st={live:'● Live',connecting:'Connecting…',retrying:'Reconnecting…',starting:'Starting…',finished:'Finished',error:'Problem'}[o.state]||o.state;
+      return '<div><b>'+esc(o.name)+'</b><span style="color:'+(o.state==='live'?'#86efac':o.state==='retrying'||o.state==='error'?'#fca5a5':'#8b97b1')+'">'+esc(st)+(o.msg?' · '+esc(o.msg):'')+'</span><span>'+(o.kind==='rec'?(o.bytes?(o.bytes/1073741824).toFixed(2)+' GB':''):(o.kbps?(o.kbps/1000).toFixed(1)+' Mb/s':''))+'</span></div>'; }).join(''); }
+    $('encInfo').textContent=f.encoder?('Video engine: '+({libx264:'standard (processor)',h264_nvenc:'NVIDIA graphics chip',h264_qsv:'Intel graphics chip',h264_amf:'AMD graphics chip',h264_videotoolbox:'Mac graphics chip'}[f.encoder]||f.encoder)):'';
+  }
+  function load(first){ return api('/api/state').then(function(s){ S=s; drawStatus();
+    if(first||!dirty){ dests=(s.dests||[]).map(function(d){ return {id:d.id,name:d.name,type:d.type,url:d.url||'',key:'',keyHint:d.keyHint,enabled:d.enabled}; }); cams=(s.ptz||[]).map(function(c){ return {id:c.id,name:c.name,ip:c.ip,proto:c.proto,port:c.port,presets:c.presets||{}}; });
+      $('recFormat').innerHTML=(s.recFormats||[]).map(function(f){ return '<option value="'+f.id+'">'+esc(f.label)+'</option>'; }).join(''); $('recFormat').value=s.recFormat; $('recFolder').value=s.recFolder||''; $('enc').checked=s.streamMode==='encode'; drawDests(); drawCams(); } }); }
+  document.querySelectorAll('[data-add]').forEach(function(b){ b.onclick=function(){ var t=b.dataset.add; dests.push({id:'',name:DEF[t][0],type:t,url:DEF[t][1],key:'',enabled:true}); drawDests(); mark(); }; });
+  $('addCam').onclick=function(){ cams.push({id:'',name:'PTZ '+(cams.length+1),ip:'',proto:'sony',port:0,presets:{}}); drawCams(); mark(); };
+  ['recFormat','recFolder','enc'].forEach(function(id){ $(id).onchange=$(id).oninput=mark; });
+  $('save').onclick=function(){ $('msg').textContent=''; api('/api/config',{dests:dests.map(function(d){ return {id:d.id,name:d.name,type:d.type,url:d.url,key:d.key,enabled:d.enabled}; }),ptz:cams,recFormat:$('recFormat').value,recFolder:$('recFolder').value,streamMode:$('enc').checked?'encode':'auto'}).then(function(j){
+    if(j.error){ $('msg').textContent=j.error; $('msg').className='note err'; return; } dirty=false; $('msg').textContent='Saved'; $('msg').className='note'; load(true); }); };
+  $('pick').onclick=function(){ $('pick').disabled=true; $('msg').textContent='The folder window may open behind this browser.'; $('msg').className='note'; api('/api/folder',{action:'pick'}).then(function(j){ $('pick').disabled=false; $('msg').textContent=''; if(j.folder){ $('recFolder').value=j.folder; mark(); } }); };
+  $('openF').onclick=function(){ api('/api/folder',{action:'open'}); };
+  $('ffInstall').onclick=function(){ api('/api/ffmpeg',{action:'install'}).then(function(j){ if(j.error) $('ffMsg').textContent=j.error; load(); }); };
+  $('ffCheck').onclick=function(){ api('/api/ffmpeg',{action:'check'}).then(function(){ setTimeout(load,1500); }); };
+  $('ffUse').onclick=function(){ api('/api/ffmpeg',{action:'path',path:$('ffPath').value}).then(function(){ setTimeout(load,1500); }); };
+  window.addEventListener('beforeunload',function(e){ if(dirty){ e.preventDefault(); e.returnValue=''; } });
+  load(true); setInterval(load,2000);
+})();
+</script>
+</body>
+</html>

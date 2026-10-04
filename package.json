@@ -1,0 +1,112 @@
+{
+  "name": "lucon-studio",
+  "productName": "Lucon Studio",
+  "version": "1.0.0",
+  "description": "Lucon Studio for Mac and Windows: live production with Lucon Link and offline captions built in.",
+  "author": "Lucon House",
+  "homepage": "https://events.luconhouse.com",
+  "license": "UNLICENSED",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.10"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "com.luconhouse.studio",
+    "productName": "Lucon Studio",
+    "copyright": "Copyright © Lucon House",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "picker-preload.js",
+      "picker.html",
+      "offline.html",
+      "assets/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "res/",
+        "to": ".",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "afterSign": "scripts/after-sign.js",
+    "mac": {
+      "category": "public.app-category.video",
+      "icon": "build/icon.png",
+      "identity": null,
+      "hardenedRuntime": false,
+      "minimumSystemVersion": "12.0",
+      "target": [
+        "dmg"
+      ],
+      "extendInfo": {
+        "NSCameraUsageDescription": "Lucon Studio shows your cameras in the live production.",
+        "NSMicrophoneUsageDescription": "Lucon Studio uses microphones for the programme sound and live captions.",
+        "NSAudioCaptureUsageDescription": "Lucon Studio can take the computer's sound when you share a screen.",
+        "LSApplicationCategoryType": "public.app-category.video"
+      }
+    },
+    "dmg": {
+      "title": "Lucon Studio",
+      "contents": [
+        {
+          "x": 150,
+          "y": 190
+        },
+        {
+          "x": 390,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Lucon Studio",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "stephenlucky222-cmd",
+        "repo": "lucon-studio-app",
+        "releaseType": "release"
+      }
+    ]
+  }
+}

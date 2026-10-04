@@ -1,0 +1,7 @@
+node_modules/
+dist/
+res/
+wcpp/
+models/
+package-lock.json
+.DS_Store
