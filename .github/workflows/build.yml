@@ -67,6 +67,22 @@ jobs:
           cd link && CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -trimpath -ldflags "-s -w" -o ../res/link/lucon-link$EXT .
           ls -la ../res/link
 
+      - name: FFmpeg for streaming and recording (so nothing else needs installing)
+        continue-on-error: true
+        run: |
+          cd res/link
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            curl -fsSL --retry 3 -o ff.zip "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+            unzip -q ff.zip && cp ffmpeg-*/bin/ffmpeg.exe . && cp ffmpeg-*/LICENSE.txt FFMPEG-LICENSE.txt && rm -rf ff.zip ffmpeg-*/
+          else
+            A=$([ "${{ matrix.goarch }}" = "arm64" ] && echo arm64 || echo amd64)
+            curl -fsSL --retry 3 -o ff.zip "https://ffmpeg.martin-riedl.de/redirect/latest/macos/$A/release/ffmpeg.zip"
+            unzip -q -o ff.zip && rm -f ff.zip && chmod +x ffmpeg
+            echo "FFmpeg (https://ffmpeg.org) is free software under the GNU GPL. Source code: https://ffmpeg.org/download.html" > FFMPEG-LICENSE.txt
+          fi
+          echo "::notice::FFmpeg: $(./ffmpeg -hide_banner -version | head -1)"
+          ls -la
+
       # ---------- Whisper (offline captions) ----------
       - uses: actions/checkout@v4
         with:
@@ -137,8 +153,7 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then APP="dist/win-unpacked/Lucon Studio.exe"; else APP="$(find dist -maxdepth 2 -name 'Lucon Studio.app' | head -1)/Contents/MacOS/Lucon Studio"; fi
           echo "App: $APP"
           LUCON_SMOKE="$RUNNER_TEMP/smoke.json" LUCON_SMOKE_PCM="$RUNNER_TEMP/speech.pcm" "$APP" || true
-          cat "$RUNNER_TEMP/smoke.json"
-          node -e "const r=require(process.argv[1]); if(!r.ok){ console.error('APP TEST FAILED'); process.exit(1); } console.log('APP TEST PASSED')" "$RUNNER_TEMP/smoke.json"
+          node -e "const fs=require('fs');let r={ok:false,missing:true};try{r=JSON.parse(fs.readFileSync(process.argv[1],'utf8'))}catch{} const m=(r.ok?'APP TEST PASSED':'APP TEST FAILED')+'\n'+JSON.stringify(r,null,1); console.log('::'+(r.ok?'notice':'error')+'::'+m.replace(/%/g,'%25').replace(/\n/g,'%0A')); process.exit(r.ok?0:1)" "$RUNNER_TEMP/smoke.json"
       - name: Files
         run: ls -la dist
       - uses: actions/upload-artifact@v4
