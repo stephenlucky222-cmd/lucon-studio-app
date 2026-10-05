@@ -204,7 +204,11 @@ jobs:
         with:
           path: out
           merge-multiple: true
-      - run: ls -la out
+      - name: Put all downloads in one folder
+        run: |
+          mkdir -p rel
+          find out -type f -exec cp -f {} rel/ \;
+          ls -la rel
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.version.outputs.version }}
@@ -224,5 +228,5 @@ jobs:
             • Windows 10 or 11: Lucon-Studio-Windows-Setup.exe
 
             Both have Lucon Link and offline captions built in.
-          files: out/*
+          files: rel/*
           fail_on_unmatched_files: true
