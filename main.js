@@ -1,5 +1,6 @@
-// Lucon Studio for Mac and Windows.
-// The Studio (events.luconhouse.com) in its own window with its own Chromium engine, Lucon Link built in
+// Lucon Events and Lucon Studio for Mac and Windows (one code base, two apps; flavour.json says which one this is).
+// Lucon Events: registration, check-in, badges, reports and the Studio. Lucon Studio: opens straight to the Studio.
+// The website (events.luconhouse.com) in its own window with its own Chromium engine, Lucon Link built in
 // (streaming, professional recording, PTZ cameras and offline captions with Whisper), a menu-bar / tray status,
 // "start when the computer starts", and updates.
 'use strict';
@@ -9,13 +10,18 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 
 const SITE = 'https://events.luconhouse.com';
-const HOME = SITE + '/workspace/index.html';
+const FLAVOUR = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'flavour.json'), 'utf8')).id === 'events' ? 'events' : 'studio'; } catch { return 'studio'; } })();
+const EVENTS = FLAVOUR === 'events';
+const NAME = EVENTS ? 'Lucon Events' : 'Lucon Studio';
+const ICON = path.join(__dirname, 'assets', EVENTS ? 'icon-events-256.png' : 'icon-256.png');
+// Lucon Events opens My Events; Lucon Studio opens My Events too, but each event opens straight in the Studio
+const HOME = SITE + '/admin/index.html' + (EVENTS ? '' : '?app=studio');
 const LINK = 'http://127.0.0.1:9110';
 const REPO = 'stephenlucky222-cmd/lucon-studio-app';
 const IS_MAC = process.platform === 'darwin', IS_WIN = process.platform === 'win32';
 const SMOKE = process.env.LUCON_SMOKE || ''; // set by the automatic tests: a file to write results to
 
-app.setName('Lucon Studio');
+app.setName(NAME);
 if (!SMOKE && !app.requestSingleInstanceLock()) { app.quit(); }
 // the Studio draws the programme many times a second: never slow it down in the background
 app.commandLine.appendSwitch('disable-background-timer-throttling');
@@ -67,10 +73,10 @@ function webPrefs() {
 }
 function createWindow(url) {
   const b = SET.bounds || { width: 1440, height: 900 };
-  win = new BrowserWindow({ ...b, minWidth: 1024, minHeight: 680, backgroundColor: '#06080d', title: 'Lucon Studio', show: false, icon: path.join(__dirname, 'assets', 'icon-256.png'), webPreferences: webPrefs() });
+  win = new BrowserWindow({ ...b, minWidth: 1024, minHeight: 680, backgroundColor: '#06080d', title: NAME, show: false, icon: ICON, webPreferences: webPrefs() });
   if (SET.maxed && !SMOKE) win.maximize();
   win.once('ready-to-show', () => win.show());
-  win.on('page-title-updated', (e, t) => { e.preventDefault(); const n = String(t || '').replace(/\s*[·|–-]\s*Lucon.*$/i, '').trim(); win.setTitle(n && !/^lucon/i.test(n) ? 'Lucon Studio — ' + n : 'Lucon Studio'); });
+  win.on('page-title-updated', (e, t) => { e.preventDefault(); const n = String(t || '').replace(/\s*[·|–-]\s*Lucon.*$/i, '').trim(); win.setTitle(n && !/^lucon/i.test(n) ? NAME + ' — ' + n : NAME); });
   win.on('close', () => { try { SET.maxed = win.isMaximized(); if (!SET.maxed) SET.bounds = win.getBounds(); saveSet(); } catch {} });
   win.on('closed', () => { win = null; });
   wireContents(win.webContents);
@@ -82,15 +88,15 @@ function wireContents(wc) {
   // stay on our site; everything else opens in the normal browser
   wc.on('will-navigate', (e, u) => { if (!trusted(u)) { e.preventDefault(); shell.openExternal(u); } });
   wc.setWindowOpenHandler(({ url }) => {
-    if (url === 'about:blank' || trusted(url)) return { action: 'allow', overrideBrowserWindowOptions: { backgroundColor: '#000000', autoHideMenuBar: true, icon: path.join(__dirname, 'assets', 'icon-256.png'), webPreferences: webPrefs() } };
+    if (url === 'about:blank' || trusted(url)) return { action: 'allow', overrideBrowserWindowOptions: { backgroundColor: '#000000', autoHideMenuBar: true, icon: ICON, webPreferences: webPrefs() } };
     shell.openExternal(url); return { action: 'deny' };
   });
   wc.on('did-create-window', w => wireContents(w.webContents));
-  wc.on('did-navigate', (e, u) => { if (/\/workspace\/studio\/index\.html\?/.test(u)) { SET.last = u; saveSet(); } });
+  wc.on('did-navigate', (e, u) => { if ((EVENTS ? /\/(workspace|station)\/[^?]*\?/ : /\/workspace\/studio\/index\.html\?/).test(u)) { SET.last = u; saveSet(); } });
   wc.on('did-fail-load', (e, code, desc, u, main) => {
     if (!main || code === -3) return; // -3 = aborted (normal when a page changes)
     log('Load failed', code, desc, u);
-    wc.loadFile(path.join(__dirname, 'offline.html'), { query: { u, d: desc } }).catch(() => {});
+    wc.loadFile(path.join(__dirname, 'offline.html'), { query: { u, d: desc, n: NAME } }).catch(() => {});
   });
   wc.on('render-process-gone', (e, d) => { log('Page stopped', d.reason); if (d.reason !== 'clean-exit' && !quitting) setTimeout(() => { try { wc.reload(); } catch {} }, 800); });
 }
@@ -108,7 +114,7 @@ function wirePermissions(ses) {
 }
 async function pickScreen(req) {
   const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 }, fetchWindowIcons: false });
-  const list = sources.filter(s => !/^Lucon Studio/.test(s.name) || s.id.startsWith('screen')).map(s => ({ id: s.id, name: s.name, screen: s.id.startsWith('screen'), img: s.thumbnail.toDataURL() }));
+  const list = sources.filter(s => !/^Lucon (Studio|Events)/.test(s.name) || s.id.startsWith('screen')).map(s => ({ id: s.id, name: s.name, screen: s.id.startsWith('screen'), img: s.thumbnail.toDataURL() }));
   return new Promise(resolve => {
     const p = new BrowserWindow({ width: 820, height: 600, parent: win || undefined, modal: !!win, resizable: true, minimizable: false, title: 'Share a screen or window', backgroundColor: '#0b0f17', webPreferences: { preload: path.join(__dirname, 'picker-preload.js'), contextIsolation: true, sandbox: true } });
     let done = false;
@@ -127,12 +133,12 @@ function loginOn() { try { return app.getLoginItemSettings().openAtLogin; } catc
 function setLogin(on) { try { app.setLoginItemSettings({ openAtLogin: on, openAsHidden: false }); } catch {} buildTray(); buildMenu(); }
 function buildMenu() {
   const t = [
-    ...(IS_MAC ? [{ label: 'Lucon Studio', submenu: [{ role: 'about' }, { label: 'Check for updates…', click: () => checkUpdates(true) }, { type: 'separator' }, { label: 'Start when the computer starts', type: 'checkbox', checked: loginOn(), click: m => setLogin(m.checked) }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit', label: 'Quit Lucon Studio' }] }] : []),
-    { label: 'File', submenu: [{ label: 'Open Lucon Studio', accelerator: 'CmdOrCtrl+O', click: () => { if (win) win.show(); else createWindow(); } }, { label: 'My events', accelerator: 'CmdOrCtrl+Shift+H', click: goHome }, { label: 'Lucon Link settings', click: openLinkSettings }, { type: 'separator' }, IS_MAC ? { role: 'close' } : { role: 'quit', label: 'Quit' }] },
+    ...(IS_MAC ? [{ label: NAME, submenu: [{ role: 'about' }, { label: 'Check for updates…', click: () => checkUpdates(true) }, { type: 'separator' }, { label: 'Start when the computer starts', type: 'checkbox', checked: loginOn(), click: m => setLogin(m.checked) }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit', label: 'Quit ' + NAME }] }] : []),
+    { label: 'File', submenu: [{ label: 'Open ' + NAME, accelerator: 'CmdOrCtrl+O', click: () => { if (win) win.show(); else createWindow(); } }, { label: 'My events', accelerator: 'CmdOrCtrl+Shift+H', click: goHome }, { label: 'Lucon Link settings', click: openLinkSettings }, { type: 'separator' }, IS_MAC ? { role: 'close' } : { role: 'quit', label: 'Quit' }] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: 'View', submenu: [{ label: 'Back', accelerator: IS_MAC ? 'Cmd+[' : 'Alt+Left', click: () => { const wc = BrowserWindow.getFocusedWindow()?.webContents; if (wc && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack(); } }, { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => BrowserWindow.getFocusedWindow()?.webContents.reload() }, { label: 'Reload (fresh copy)', accelerator: 'CmdOrCtrl+Shift+R', click: () => BrowserWindow.getFocusedWindow()?.webContents.reloadIgnoringCache() }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }, { label: 'Developer tools (for support)', accelerator: IS_MAC ? 'Alt+Cmd+I' : 'Ctrl+Shift+I', click: () => BrowserWindow.getFocusedWindow()?.webContents.toggleDevTools() }] },
     { label: 'Window', submenu: [{ role: 'minimize' }, ...(IS_MAC ? [{ role: 'zoom' }, { type: 'separator' }, { role: 'front' }] : [])] },
-    { label: 'Help', submenu: [{ label: 'Lucon Studio help', click: () => shell.openExternal(SITE + '/help/index.html') }, { label: 'Show the app log', click: () => shell.showItemInFolder(path.join(app.getPath('userData'), 'app.log')) }, ...(IS_MAC ? [] : [{ label: 'Check for updates…', click: () => checkUpdates(true) }, { label: 'Start when the computer starts', type: 'checkbox', checked: loginOn(), click: m => setLogin(m.checked) }])] }
+    { label: 'Help', submenu: [{ label: NAME + ' help', click: () => shell.openExternal(SITE + '/help/index.html') }, { label: 'Show the app log', click: () => shell.showItemInFolder(path.join(app.getPath('userData'), 'app.log')) }, ...(IS_MAC ? [] : [{ label: 'Check for updates…', click: () => checkUpdates(true) }, { label: 'Start when the computer starts', type: 'checkbox', checked: loginOn(), click: m => setLogin(m.checked) }])] }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(t));
 }
@@ -153,7 +159,7 @@ function buildTray() {
     { label: 'PTZ cameras: ' + (ok ? (s.ptz || []).length + ' saved' : '—'), enabled: false },
     { label: 'Offline captions: ' + whTxt, enabled: false },
     { type: 'separator' },
-    { label: 'Open Lucon Studio', accelerator: 'CmdOrCtrl+O', click: () => { if (win) { win.show(); win.focus(); } else createWindow(); } },
+    { label: 'Open ' + NAME, accelerator: 'CmdOrCtrl+O', click: () => { if (win) { win.show(); win.focus(); } else createWindow(); } },
     { label: 'Lucon Link settings', click: openLinkSettings },
     { label: 'Start when the computer starts', type: 'checkbox', checked: loginOn(), click: m => setLogin(m.checked) },
     { label: 'Check for updates (v' + app.getVersion() + ')', click: () => checkUpdates(true) },
@@ -169,7 +175,7 @@ let upd = { busy: false, ready: false, told: '' };
 async function latestRelease() {
   return new Promise(resolve => {
     const req = net.request({ url: `https://api.github.com/repos/${REPO}/releases/latest`, method: 'GET' });
-    req.setHeader('User-Agent', 'Lucon-Studio'); req.setHeader('Accept', 'application/vnd.github+json');
+    req.setHeader('User-Agent', NAME.replace(' ', '-')); req.setHeader('Accept', 'application/vnd.github+json');
     let body = ''; req.on('response', r => { r.on('data', c => body += c); r.on('end', () => { try { resolve(r.statusCode === 200 ? JSON.parse(body) : null); } catch { resolve(null); } }); });
     req.on('error', () => resolve(null)); req.end();
   });
@@ -180,22 +186,22 @@ async function checkUpdates(byHand) {
     const rel = await latestRelease();
     if (!rel || !rel.tag_name) { if (byHand) dialog.showMessageBox({ type: 'info', message: 'Could not check for updates', detail: 'Check the internet connection and try again.' }); return; }
     const v = rel.tag_name.replace(/^v/, '');
-    if (!newer(v, app.getVersion())) { if (byHand) dialog.showMessageBox({ type: 'info', message: 'Lucon Studio is up to date', detail: 'You have version ' + app.getVersion() + '.' }); return; }
+    if (!newer(v, app.getVersion())) { if (byHand) dialog.showMessageBox({ type: 'info', message: NAME + ' is up to date', detail: 'You have version ' + app.getVersion() + '.' }); return; }
     if (IS_WIN && app.isPackaged) {
       // Windows: download in the background, then offer a restart
       const { autoUpdater } = require('electron-updater');
       autoUpdater.autoDownload = true; autoUpdater.autoInstallOnAppQuit = true; autoUpdater.logger = { info: m => log('[update]', m), warn: m => log('[update]', m), error: m => log('[update]', m) };
       autoUpdater.once('update-downloaded', async () => {
-        const r = await dialog.showMessageBox({ type: 'info', buttons: ['Restart now', 'Later'], defaultId: 0, cancelId: 1, message: 'Update ready — restart', detail: 'Lucon Studio ' + v + ' is ready. Restart now, or it will be installed when you quit. Do not restart during a live show.' });
+        const r = await dialog.showMessageBox({ type: 'info', buttons: ['Restart now', 'Later'], defaultId: 0, cancelId: 1, message: 'Update ready — restart', detail: NAME + ' ' + v + ' is ready. Restart now, or it will be installed when you quit. Do not restart during a live show.' });
         if (r.response === 0) { quitting = true; autoUpdater.quitAndInstall(); }
       });
       autoUpdater.once('error', e => { log('[update] failed', e && e.message); if (byHand) shell.openExternal(rel.html_url); });
       await autoUpdater.checkForUpdates();
-      if (byHand) dialog.showMessageBox({ type: 'info', message: 'Downloading Lucon Studio ' + v, detail: 'You can keep working. You will be asked to restart when it is ready.' });
+      if (byHand) dialog.showMessageBox({ type: 'info', message: 'Downloading ' + NAME + ' ' + v, detail: 'You can keep working. You will be asked to restart when it is ready.' });
     } else {
       if (!byHand && upd.told === v) return; upd.told = v;
-      const asset = (rel.assets || []).find(a => IS_MAC && (process.arch === 'arm64' ? /Mac-Apple/i : /Mac-Intel/i).test(a.name) && /\.dmg$/i.test(a.name));
-      const r = await dialog.showMessageBox({ type: 'info', buttons: ['Download', 'Later'], defaultId: 0, cancelId: 1, message: 'New version — Lucon Studio ' + v, detail: (rel.body ? String(rel.body).slice(0, 600) + '\n\n' : '') + 'Download it, close Lucon Studio, then drag the new Lucon Studio into Applications (replace the old one).' });
+      const asset = (rel.assets || []).find(a => IS_MAC && a.name.startsWith(NAME.replace(' ', '-') + '-') && (process.arch === 'arm64' ? /Mac-Apple/i : /Mac-Intel/i).test(a.name) && /\.dmg$/i.test(a.name));
+      const r = await dialog.showMessageBox({ type: 'info', buttons: ['Download', 'Later'], defaultId: 0, cancelId: 1, message: 'New version — ' + NAME + ' ' + v, detail: 'Download it, close ' + NAME + ', then drag the new ' + NAME + ' into Applications (replace the old one).' });
       if (r.response === 0) shell.openExternal(asset ? asset.browser_download_url : rel.html_url);
     }
   } catch (e) { log('Update check failed', e && e.message); }
@@ -203,10 +209,10 @@ async function checkUpdates(byHand) {
 }
 
 /* ---------- start ---------- */
-ipcMain.on('lucon-info', e => { e.returnValue = { app: true, version: app.getVersion(), platform: process.platform, arch: process.arch }; });
+ipcMain.on('lucon-info', e => { e.returnValue = { app: true, flavour: FLAVOUR, name: NAME, version: app.getVersion(), platform: process.platform, arch: process.arch }; });
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } else createWindow(); });
 app.whenReady().then(async () => {
-  loadSet(); log('Lucon Studio', app.getVersion(), process.platform, process.arch, 'Electron', process.versions.electron);
+  loadSet(); log(NAME, app.getVersion(), process.platform, process.arch, 'Electron', process.versions.electron);
   wirePermissions(session.defaultSession);
   if (IS_MAC && !SMOKE) { for (const m of ['camera', 'microphone']) { try { if (systemPreferences.getMediaAccessStatus(m) === 'not-determined') await systemPreferences.askForMediaAccess(m); } catch {} } }
   startLink();
@@ -224,7 +230,7 @@ app.on('will-quit', () => { stopLink(); });
 /* ---------- automatic test (used by the build on GitHub) ---------- */
 async function smokeTest() {
   const out = { ok: false, steps: {} };
-  const done = (ok) => { out.ok = ok; try { fs.writeFileSync(SMOKE, JSON.stringify(out, null, 2)); } catch {} app.exit(ok ? 0 : 1); };
+  const done = (ok) => { out.ok = ok; try { fs.writeFileSync(SMOKE, JSON.stringify(out, null, 2)); } catch {} stopLink(); setTimeout(() => app.exit(ok ? 0 : 1), 2000); };
   setTimeout(() => { out.steps.timeout = true; done(false); }, 90000);
   try {
     for (let i = 0; i < 40 && !linkState; i++) { await new Promise(r => setTimeout(r, 500)); linkState = await linkGet('/api/state'); }
@@ -234,7 +240,7 @@ async function smokeTest() {
     const w = createWindow(SITE + '/');
     await new Promise(r => w.webContents.once('did-finish-load', r));
     out.steps.title = w.getTitle();
-    out.steps.page = await w.webContents.executeJavaScript(`(async()=>{ const r={app:!!(window.luconApp&&window.luconApp.app),version:window.luconApp&&window.luconApp.version};
+    out.steps.flavour = FLAVOUR; out.steps.page = await w.webContents.executeJavaScript(`(async()=>{ const r={app:!!(window.luconApp&&window.luconApp.app),version:window.luconApp&&window.luconApp.version,flavour:window.luconApp&&window.luconApp.flavour};
       try{ const j=await (await fetch('${LINK}/api/whisper',{cache:'no-store'})).json(); r.whisper=j.state; r.model=j.model; }catch(e){ r.whisperErr=String(e); }
       try{ const s=await navigator.mediaDevices.enumerateDevices(); r.devices=s.length; }catch(e){ r.devErr=String(e); }
       r.canvas=!!document.createElement('canvas').getContext('2d'); r.speechApi=!!(window.SpeechRecognition||window.webkitSpeechRecognition); return r; })()`);
@@ -245,6 +251,6 @@ async function smokeTest() {
     }
     const p = out.steps.page || {};
     const wok = !process.env.LUCON_SMOKE_PCM || /faith/i.test((out.steps.whisper || {}).text || '');
-    done(!!(p.app && out.steps.link && (p.whisper === 'idle' || p.whisper === 'ready' || p.whisper === 'starting') && wok));
+    done(!!(p.app && p.flavour === FLAVOUR && out.steps.link && (p.whisper === 'idle' || p.whisper === 'ready' || p.whisper === 'starting') && wok));
   } catch (e) { out.steps.error = String(e && e.stack || e); done(false); }
 }

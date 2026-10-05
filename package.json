@@ -1,8 +1,8 @@
 {
   "name": "lucon-studio",
   "productName": "Lucon Studio",
-  "version": "1.0.0",
-  "description": "Lucon Studio for Mac and Windows: live production with Lucon Link and offline captions built in.",
+  "version": "1.1.0",
+  "description": "Lucon Events and Lucon Studio for Mac and Windows, with Lucon Link and offline captions built in.",
   "author": "Lucon House",
   "homepage": "https://events.luconhouse.com",
   "license": "UNLICENSED",
@@ -10,7 +10,9 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "dist:studio": "node scripts/flavour.js studio && electron-builder --config dist-config.json",
+    "dist:events": "node scripts/flavour.js events && electron-builder --config dist-config.json"
   },
   "dependencies": {
     "electron-updater": "6.8.10"
@@ -22,12 +24,13 @@
   "build": {
     "appId": "com.luconhouse.studio",
     "productName": "Lucon Studio",
-    "copyright": "Copyright © Lucon House",
+    "copyright": "Copyright \u00a9 Lucon House",
     "directories": {
       "output": "dist",
       "buildResources": "build"
     },
     "files": [
+      "flavour.json",
       "main.js",
       "preload.js",
       "picker-preload.js",

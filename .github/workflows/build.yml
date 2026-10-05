@@ -1,6 +1,6 @@
-# Builds Lucon Studio for Mac (Apple chip and Intel) and Windows on GitHub's computers, tests it,
-# and when the version in package.json is new, publishes the downloads on the Releases page (tag v<version>).
-name: Build Lucon Studio
+# Builds the two apps, Lucon Studio and Lucon Events, for Mac (Apple chip and Intel) and Windows on GitHub's
+# computers, tests them, and when the version in package.json is new, publishes the downloads on the Releases page.
+name: Build Lucon Studio and Lucon Events
 
 on:
   push:
@@ -43,14 +43,14 @@ jobs:
             goarch: arm64
             cmake: -DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
             builder: --mac --arm64
-            artifact: Lucon-Studio-Mac-Apple.${ext}
+            artifact: Mac-Apple.${ext}
           - name: mac-intel
             os: macos-15-intel
             goos: darwin
             goarch: amd64
             cmake: -DGGML_METAL=OFF -DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
             builder: --mac --x64
-            artifact: Lucon-Studio-Mac-Intel.${ext}
+            artifact: Mac-Intel.${ext}
           - name: windows
             os: windows-2022
             goos: windows
@@ -58,7 +58,7 @@ jobs:
             cmake: -DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_OPENMP=OFF -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
             compat: -DGGML_NATIVE=OFF -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_OPENMP=OFF -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
             builder: --win --x64
-            artifact: Lucon-Studio-Windows-Setup.${ext}
+            artifact: Windows-Setup.${ext}
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     defaults:
@@ -156,18 +156,30 @@ jobs:
           node-version: 22
       - name: Install
         run: npm install --no-audit --no-fund
-      - name: Build the app
+      - name: Build Lucon Studio
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npx electron-builder ${{ matrix.builder }} --publish never -c.artifactName='${{ matrix.artifact }}'
-      - name: Test the app (opens the Studio website inside the app)
+          ARTIFACT: ${{ matrix.artifact }}
+        run: node scripts/flavour.js studio && npx electron-builder ${{ matrix.builder }} --publish never --config dist-config.json
+      - name: Test Lucon Studio (opens the website inside the app)
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then APP="dist/win-unpacked/Lucon Studio.exe"; else APP="$(find dist -maxdepth 2 -name 'Lucon Studio.app' | head -1)/Contents/MacOS/Lucon Studio"; fi
           echo "App: $APP"
-          LUCON_SMOKE="$RUNNER_TEMP/smoke.json" LUCON_SMOKE_PCM="$RUNNER_TEMP/speech.pcm" "$APP" || true
-          node -e "const fs=require('fs');let r={ok:false,missing:true};try{r=JSON.parse(fs.readFileSync(process.argv[1],'utf8'))}catch{} const m=(r.ok?'APP TEST PASSED':'APP TEST FAILED')+'\n'+JSON.stringify(r,null,1); console.log('::'+(r.ok?'notice':'error')+'::'+m.replace(/%/g,'%25').replace(/\n/g,'%0A')); process.exit(r.ok?0:1)" "$RUNNER_TEMP/smoke.json"
+          LUCON_SMOKE="$RUNNER_TEMP/smoke-studio.json" LUCON_SMOKE_PCM="$RUNNER_TEMP/speech.pcm" "$APP" || true
+          node -e "const fs=require('fs');let r={ok:false,missing:true};try{r=JSON.parse(fs.readFileSync(process.argv[1],'utf8'))}catch{} const m=(r.ok?'LUCON STUDIO TEST PASSED':'LUCON STUDIO TEST FAILED')+'\n'+JSON.stringify(r,null,1); console.log('::'+(r.ok?'notice':'error')+'::'+m.replace(/%/g,'%25').replace(/\n/g,'%0A')); process.exit(r.ok?0:1)" "$RUNNER_TEMP/smoke-studio.json"
+      - name: Build Lucon Events
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          ARTIFACT: ${{ matrix.artifact }}
+        run: node scripts/flavour.js events && npx electron-builder ${{ matrix.builder }} --publish never --config dist-config.json
+      - name: Test Lucon Events (opens the website inside the app)
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then APP="dist-events/win-unpacked/Lucon Events.exe"; else APP="$(find dist-events -maxdepth 2 -name 'Lucon Events.app' | head -1)/Contents/MacOS/Lucon Events"; fi
+          echo "App: $APP"
+          LUCON_SMOKE="$RUNNER_TEMP/smoke-events.json" LUCON_SMOKE_PCM="$RUNNER_TEMP/speech.pcm" "$APP" || true
+          node -e "const fs=require('fs');let r={ok:false,missing:true};try{r=JSON.parse(fs.readFileSync(process.argv[1],'utf8'))}catch{} const m=(r.ok?'LUCON EVENTS TEST PASSED':'LUCON EVENTS TEST FAILED')+'\n'+JSON.stringify(r,null,1); console.log('::'+(r.ok?'notice':'error')+'::'+m.replace(/%/g,'%25').replace(/\n/g,'%0A')); process.exit(r.ok?0:1)" "$RUNNER_TEMP/smoke-events.json"
       - name: Files
-        run: ls -la dist
+        run: ls -la dist dist-events
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
@@ -176,6 +188,10 @@ jobs:
             dist/*.exe
             dist/*.blockmap
             dist/latest*.yml
+            dist-events/*.dmg
+            dist-events/*.exe
+            dist-events/*.blockmap
+            dist-events/events*.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -193,11 +209,20 @@ jobs:
         with:
           tag_name: v${{ needs.version.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: Lucon Studio ${{ needs.version.outputs.version }}
+          name: Lucon Events and Lucon Studio ${{ needs.version.outputs.version }}
           body: |
-            Download the one for your computer:
-            • Mac with an Apple chip (M1, M2, M3, M4…): Lucon-Studio-Mac-Apple.dmg
+            Two apps. Download the one you need, for your computer.
+
+            Lucon Events: registration, check-in, badges, reports, and Lucon Studio inside.
+            • Mac with an Apple chip (M1, M2, M3, M4…): Lucon-Events-Mac-Apple.dmg
+            • Mac with an Intel processor: Lucon-Events-Mac-Intel.dmg
+            • Windows 10 or 11: Lucon-Events-Windows-Setup.exe
+
+            Lucon Studio: live production only. Opens straight to the Studio.
+            • Mac with an Apple chip: Lucon-Studio-Mac-Apple.dmg
             • Mac with an Intel processor: Lucon-Studio-Mac-Intel.dmg
             • Windows 10 or 11: Lucon-Studio-Windows-Setup.exe
+
+            Both have Lucon Link and offline captions built in.
           files: out/*
           fail_on_unmatched_files: true
